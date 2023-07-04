@@ -3,6 +3,8 @@ package com.example.qrapp.presentation
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.hardware.camera2.*
+import android.media.ImageReader
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -16,6 +18,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import com.example.qrapp.R
 import com.example.qrapp.databinding.FragmentCamBinding
 import com.example.qrapp.domain.util.BarcodeScanner
 import com.example.qrapp.domain.util.BarcodeScannerRepository
@@ -39,6 +42,16 @@ class CamFragment : Fragment(), BarcodeScannerRepository {
         BarcodeScanner(this)
     }
 
+    private lateinit var cameraProvider: ProcessCameraProvider
+    private lateinit var preview: Preview
+    private lateinit var imageAnalyzer: ImageAnalysis
+
+    private var cameraDevice: CameraDevice? = null
+    private var cameraCaptureSession: CameraCaptureSession? = null
+    private lateinit var imageReader: ImageReader
+
+    private var flashOn = false
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -48,6 +61,17 @@ class CamFragment : Fragment(), BarcodeScannerRepository {
         setupCamera()
         return binding.root
     }
+
+    override fun onStart() {
+        super.onStart()
+        binding.btnFlash.setOnClickListener {
+            flash()
+        }
+        binding.btnFocus.setOnClickListener {
+            focus()
+        }
+    }
+
 
 
     override fun onRequestPermissionsResult(
@@ -80,11 +104,11 @@ class CamFragment : Fragment(), BarcodeScannerRepository {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
 
         cameraProviderFuture.addListener({
-            val cameraProvider = cameraProviderFuture.get()
-            val preview = Preview.Builder().build().apply {
+            cameraProvider = cameraProviderFuture.get()
+            preview = Preview.Builder().build().apply {
                 setSurfaceProvider(binding.previewView.surfaceProvider)
             }
-            val imageAnalyzer = ImageAnalysis.Builder().build().apply {
+            imageAnalyzer = ImageAnalysis.Builder().build().apply {
                 setAnalyzer(executorService, getImageAnalyzerListener())
             }
             try {
@@ -145,6 +169,42 @@ class CamFragment : Fragment(), BarcodeScannerRepository {
 
     override fun onScanFailed() {
         Toast.makeText(requireContext(), "Scan fail", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun flash() {
+        flashOn = !flashOn
+
+        val id = if (flashOn) R.drawable.ic_flash_off else R.drawable.ic_flash_on
+        binding.btnFlash.setImageDrawable(ContextCompat.getDrawable(requireContext(), id))
+
+        try {
+            val cam =
+                cameraProvider.bindToLifecycle(
+                    this,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    preview,
+                    imageAnalyzer)
+            cam.cameraControl.enableTorch(flashOn)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun focus() {
+        try {
+
+            val captureRequestBuilder = cameraDevice?.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+            captureRequestBuilder?.addTarget(imageReader.surface)
+
+            val captureRequest = captureRequestBuilder?.build()
+            if (captureRequest != null) {
+                cameraCaptureSession?.setRepeatingRequest(captureRequest, null, null)
+
+            }
+            Toast.makeText(requireContext(), "focused", Toast.LENGTH_SHORT).show()
+        } catch (e: CameraAccessException) {
+            e.printStackTrace()
+        }
     }
 
     companion object {
