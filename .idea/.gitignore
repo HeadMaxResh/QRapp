@@ -1,6 +1,4 @@
 *.iml
-.gradle
-/local.properties
-/build
-/captures
+/shelf/
+/workspace.xml
 /.idea
